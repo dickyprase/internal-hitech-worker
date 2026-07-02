@@ -1,0 +1,295 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ────────────────────────────────────────────────
+
+enum UserRole {
+  admin
+  user
+}
+
+enum EmployeeStatus {
+  tetap
+  kontrak
+}
+
+enum MaritalStatus {
+  single
+  married
+}
+
+enum DayType {
+  weekday
+  weekend
+  holiday
+}
+
+enum LeaveTransactionType {
+  debit
+  credit
+  expired
+  cuti_bersama_cut
+}
+
+enum HolidayType {
+  national
+  cuti_bersama
+}
+
+enum PlafonType {
+  mc
+  ri
+}
+
+enum MedicalTransactionType {
+  debit
+  credit
+  reset_annual
+  plafon_adjustment
+}
+
+// ─── Users ────────────────────────────────────────────────
+
+model User {
+  id               String         @id @default(uuid())
+  name             String
+  email            String         @unique
+  password         String
+  role             UserRole       @default(user)
+  nik              String?        @unique
+  statusKaryawan   EmployeeStatus @default(tetap) @map("status_karyawan")
+  statusPernikahan MaritalStatus  @default(single) @map("status_pernikahan")
+  jumlahAnak       Int            @default(0) @map("jumlah_anak")
+  gajiPokok        Decimal        @default(0) @map("gaji_pokok") @db.Decimal(15, 2)
+  isActive         Boolean        @default(true) @map("is_active")
+  createdAt        DateTime       @default(now()) @map("created_at")
+  updatedAt        DateTime       @updatedAt @map("updated_at")
+
+  overtimeRecords     OvertimeRecord[]
+  leaveBalances       LeaveBalance[]
+  leaveTransactions   LeaveTransaction[]
+  medicalBalances     MedicalBalance[]
+  medicalTransactions MedicalTransaction[]
+  statusHistories     UserStatusHistory[]  @relation("UserStatusHistories")
+  statusChangesBy     UserStatusHistory[]  @relation("ChangedBy")
+
+  @@map("users")
+}
+
+// ─── Global Settings ──────────────────────────────────────
+
+model GlobalSetting {
+  id          Int      @id @default(autoincrement())
+  key         String   @unique
+  value       String
+  label       String
+  description String?
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("global_settings")
+}
+
+// ─── Overtime Rules ───────────────────────────────────────
+
+model OvertimeRule {
+  id            Int      @id @default(autoincrement())
+  label         String
+  labelFriday   String   @map("label_friday")
+  durationHours Decimal  @map("duration_hours") @db.Decimal(4, 1)
+  rate          Decimal  @db.Decimal(4, 1)
+  sortOrder     Int      @map("sort_order")
+  isActive      Boolean  @default(true) @map("is_active")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  overtimeRecords OvertimeRecord[]
+
+  @@map("overtime_rules")
+}
+
+// ─── Overtime Records ─────────────────────────────────────
+
+model OvertimeRecord {
+  id                String    @id @default(uuid())
+  userId            String    @map("user_id")
+  date              DateTime  @db.Date
+  dayType           DayType   @map("day_type")
+  isFriday          Boolean   @default(false) @map("is_friday")
+  overtimeRuleId    Int?      @map("overtime_rule_id")
+  durationHours     Decimal   @map("duration_hours") @db.Decimal(4, 1)
+  rateSnapshot      Decimal   @map("rate_snapshot") @db.Decimal(4, 1)
+  gajiSnapshot      Decimal   @map("gaji_snapshot") @db.Decimal(15, 2)
+  uangMakanSnapshot Decimal   @map("uang_makan_snapshot") @db.Decimal(15, 2)
+  dailyAmount       Decimal   @map("daily_amount") @db.Decimal(15, 2)
+  roundedAmount     Decimal   @map("rounded_amount") @db.Decimal(15, 2)
+  periodStart       DateTime  @map("period_start") @db.Date
+  periodEnd         DateTime  @map("period_end") @db.Date
+  status            String    @default("belum") // "belum" | "cair"
+  notes             String?
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  deletedAt         DateTime? @map("deleted_at")
+
+  user         User          @relation(fields: [userId], references: [id])
+  overtimeRule OvertimeRule? @relation(fields: [overtimeRuleId], references: [id])
+
+  @@index([userId, date])
+  @@index([userId, periodStart, periodEnd])
+  @@map("overtime_records")
+}
+
+// ─── Leave Balances ───────────────────────────────────────
+
+model LeaveBalance {
+  id             String   @id @default(uuid())
+  userId         String   @map("user_id")
+  year           Int
+  totalQuota     Int      @map("total_quota")
+  cutiBersamaCut Int      @default(0) @map("cuti_bersama_cut")
+  used           Int      @default(0)
+  remaining      Int
+  expiresAt      DateTime @map("expires_at") @db.Date
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  user              User               @relation(fields: [userId], references: [id])
+  leaveTransactions LeaveTransaction[]
+
+  @@unique([userId, year])
+  @@map("leave_balances")
+}
+
+// ─── Leave Types ──────────────────────────────────────────
+
+model LeaveType {
+  id           Int      @id @default(autoincrement())
+  name         String
+  deductQuota  Boolean  @default(true) @map("deduct_quota")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  leaveTransactions LeaveTransaction[]
+
+  @@map("leave_types")
+}
+
+// ─── Leave Transactions ───────────────────────────────────
+
+model LeaveTransaction {
+  id             String               @id @default(uuid())
+  userId         String               @map("user_id")
+  leaveBalanceId String               @map("leave_balance_id")
+  leaveTypeId    Int?                 @map("leave_type_id")
+  date           DateTime             @db.Date
+  type           LeaveTransactionType
+  amount         Int
+  description    String
+  refHolidayId   Int?                 @map("ref_holiday_id")
+  createdAt      DateTime             @default(now()) @map("created_at")
+  deletedAt      DateTime?            @map("deleted_at")
+
+  user         User         @relation(fields: [userId], references: [id])
+  leaveBalance LeaveBalance @relation(fields: [leaveBalanceId], references: [id])
+  leaveType    LeaveType?   @relation(fields: [leaveTypeId], references: [id])
+  refHoliday   Holiday?     @relation(fields: [refHolidayId], references: [id])
+
+  @@index([userId])
+  @@map("leave_transactions")
+}
+
+// ─── Holidays ─────────────────────────────────────────────
+
+model Holiday {
+  id        Int         @id @default(autoincrement())
+  date      DateTime    @unique @db.Date
+  name      String
+  type      HolidayType
+  year      Int
+  deletedAt DateTime?
+
+  leaveTransactions LeaveTransaction[]
+
+  @@index([year])
+  @@map("holidays")
+}
+
+// ─── Plafon Rules ─────────────────────────────────────────
+
+model PlafonRule {
+  id               Int           @id @default(autoincrement())
+  type             PlafonType
+  label            String
+  statusPernikahan MaritalStatus @map("status_pernikahan")
+  jumlahAnakMin    Int           @map("jumlah_anak_min")
+  jumlahAnakMax    Int?          @map("jumlah_anak_max")
+  multiplier       Decimal       @db.Decimal(4, 1)
+  isActive         Boolean       @default(true) @map("is_active")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+
+  @@map("plafon_rules")
+}
+
+// ─── Medical Balances ─────────────────────────────────────
+
+model MedicalBalance {
+  id        String     @id @default(uuid())
+  userId    String     @map("user_id")
+  type      PlafonType
+  year      Int
+  plafon    Decimal    @db.Decimal(15, 2)
+  used      Decimal    @default(0) @db.Decimal(15, 2)
+  remaining Decimal    @db.Decimal(15, 2)
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
+
+  user                User                 @relation(fields: [userId], references: [id])
+  medicalTransactions MedicalTransaction[]
+
+  @@unique([userId, type, year])
+  @@map("medical_balances")
+}
+
+// ─── Medical Transactions ─────────────────────────────────
+
+model MedicalTransaction {
+  id               String                 @id @default(uuid())
+  userId           String                 @map("user_id")
+  medicalBalanceId String                 @map("medical_balance_id")
+  date             DateTime               @db.Date
+  type             MedicalTransactionType
+  amount           Decimal                @db.Decimal(15, 2)
+  description      String
+  notes            String?
+  createdAt        DateTime               @default(now()) @map("created_at")
+  deletedAt        DateTime?
+
+  user           User           @relation(fields: [userId], references: [id])
+  medicalBalance MedicalBalance @relation(fields: [medicalBalanceId], references: [id])
+
+  @@index([userId])
+  @@map("medical_transactions")
+}
+
+// ─── User Status Histories ────────────────────────────────
+
+model UserStatusHistory {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  changedBy    String?  @map("changed_by")
+  fieldChanged String   @map("field_changed")
+  oldValue     String   @map("old_value")
+  newValue     String   @map("new_value")
+  notes        String?
+  changedAt    DateTime @default(now()) @map("changed_at")
+
+  user          User  @relation("UserStatusHistories", fields: [userId], references: [id])
+  changedByUser User? @relation("ChangedBy", fields: [changedBy], references: [id])
+
+  @@index([userId])
+  @@map("user_status_histories")
+}
