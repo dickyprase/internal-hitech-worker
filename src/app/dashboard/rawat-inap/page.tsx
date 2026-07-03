@@ -36,6 +36,8 @@ import { PageHeader } from '@/components/shared/page-header';
 import { CurrencyInput } from '@/components/shared/currency-input';
 import { DatePickerField } from '@/components/shared/date-picker-field';
 import { EmptyState } from '@/components/shared/empty-state';
+import { usePagination } from '@/hooks/use-pagination';
+import { PaginationBar } from '@/components/shared/pagination-bar';
 import { Progress } from '@/components/ui/progress';
 import { formatRupiah, formatDate } from '@/lib/format';
 import {
@@ -88,6 +90,9 @@ export default function RawatInapPage() {
   const [editAmount, setEditAmount] = useState(0);
   const [editDesc, setEditDesc] = useState('');
   const [editOpen, setEditOpen] = useState(false);
+
+  // Pagination
+  const { currentItems: paginatedTx, currentPage: txPage, setCurrentPage: setTxPage, totalPages: txTotalPages } = usePagination(transactions, 10);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -406,6 +411,7 @@ export default function RawatInapPage() {
               description='Riwayat klaim rawat inap akan muncul di sini'
             />
           ) : (
+            <>
             <div className='w-full overflow-x-auto rounded-lg border'>
               <Table>
                 <TableHeader>
@@ -417,7 +423,7 @@ export default function RawatInapPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {transactions.map((tx) => (
+                  {paginatedTx.map((tx) => (
                     <TableRow key={tx.id}>
                       <TableCell className='whitespace-nowrap'>{formatDate(tx.date)}</TableCell>
                       <TableCell className='max-w-[250px] truncate'>{tx.description}</TableCell>
@@ -467,6 +473,8 @@ export default function RawatInapPage() {
                 </TableBody>
               </Table>
             </div>
+            <PaginationBar currentPage={txPage} totalPages={txTotalPages} onPageChange={setTxPage} />
+            </>
           )}
         </CardContent>
       </Card>

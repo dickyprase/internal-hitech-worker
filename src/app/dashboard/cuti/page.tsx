@@ -36,6 +36,8 @@ import { PageHeader } from '@/components/shared/page-header';
 import { Progress } from '@/components/ui/progress';
 
 import { EmptyState } from '@/components/shared/empty-state';
+import { usePagination } from '@/hooks/use-pagination';
+import { PaginationBar } from '@/components/shared/pagination-bar';
 
 import { formatDate } from '@/lib/format';
 import {
@@ -123,6 +125,9 @@ export default function CutiPage() {
   const isOverQuota = needsQuotaCheck && balance && selectedDates.length > balance.remaining;
   const canSubmit =
     selectedDates.length > 0 && selectedLeaveType && leaveDesc.trim() && !isOverQuota && !saving;
+
+  // Pagination for transactions
+  const { currentItems, currentPage, setCurrentPage, totalPages } = usePagination(transactions, 10);
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
@@ -434,7 +439,7 @@ export default function CutiPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {transactions.map((tx) => (
+                    {currentItems.map((tx) => (
                       <TableRow key={tx.id}>
                         <TableCell className='whitespace-nowrap font-medium'>
                           {formatDate(tx.date)}
@@ -470,6 +475,13 @@ export default function CutiPage() {
                   </TableBody>
                 </Table>
               </div>
+            )}
+            {transactions.length > 0 && (
+              <PaginationBar
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+              />
             )}
           </CardContent>
         </Card>

@@ -36,6 +36,8 @@ import {
   AlertDialogTrigger
 } from '@/components/ui/alert-dialog';
 import { CurrencyInput } from '@/components/shared/currency-input';
+import { usePagination } from '@/hooks/use-pagination';
+import { PaginationBar } from '@/components/shared/pagination-bar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { formatDate } from '@/lib/format';
@@ -117,6 +119,11 @@ export default function SettingsPage() {
   const [leaveTypes, setLeaveTypes] = useState<any[]>([]);
   const [newLeaveTypeName, setNewLeaveTypeName] = useState('');
   const [newLeaveTypeDeduct, setNewLeaveTypeDeduct] = useState(true);
+
+  // Pagination
+  const filteredHolidays = holidays.filter((h: any) => h.year === Number(holidayYear));
+  const { currentItems: paginatedHolidays, currentPage: holidayPage, setCurrentPage: setHolidayPage, totalPages: holidayTotalPages } = usePagination(filteredHolidays, 7);
+  const { currentItems: paginatedLeaveTypes, currentPage: ltPage, setCurrentPage: setLtPage, totalPages: ltTotalPages } = usePagination(leaveTypes, 7);
   const [tempMult, setTempMult] = useState(0);
 
   useEffect(() => {
@@ -584,16 +591,14 @@ export default function SettingsPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {holidays.filter((h: any) => h.year === Number(holidayYear)).length === 0 ? (
+                    {filteredHolidays.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={4} className='text-center text-muted-foreground py-4'>
                           Belum ada data
                         </TableCell>
                       </TableRow>
                     ) : (
-                      holidays
-                        .filter((h: any) => h.year === Number(holidayYear))
-                        .map((h: any) => (
+                      paginatedHolidays.map((h: any) => (
                           <TableRow key={h.id}>
                             <TableCell className='whitespace-nowrap'>
                               {formatDate(h.date)}
@@ -627,6 +632,7 @@ export default function SettingsPage() {
                   </TableBody>
                 </Table>
               </div>
+              <PaginationBar currentPage={holidayPage} totalPages={holidayTotalPages} onPageChange={setHolidayPage} />
             </div>
           </div>
         </CardContent>
@@ -691,7 +697,7 @@ export default function SettingsPage() {
                         </TableCell>
                       </TableRow>
                     ) : (
-                      leaveTypes.map((lt: any) => (
+                      paginatedLeaveTypes.map((lt: any) => (
                         <TableRow key={lt.id}>
                           <TableCell className='font-medium'>{lt.name}</TableCell>
                           <TableCell>
@@ -710,6 +716,7 @@ export default function SettingsPage() {
                   </TableBody>
                 </Table>
               </div>
+              <PaginationBar currentPage={ltPage} totalPages={ltTotalPages} onPageChange={setLtPage} />
             </div>
           </div>
         </CardContent>

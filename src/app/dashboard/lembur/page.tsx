@@ -1,5 +1,8 @@
 'use client';
 
+import { usePagination } from '@/hooks/use-pagination';
+import { PaginationBar } from '@/components/shared/pagination-bar';
+
 import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -178,6 +181,9 @@ export default function LemburPage() {
     return d.getMonth() === Number(filterMonth) - 1 && d.getFullYear() === Number(filterYear);
   });
 
+
+  // Pagination for period table
+  const { currentItems: paginatedPeriods, currentPage: periodPage, setCurrentPage: setPeriodPage, totalPages: periodTotalPages } = usePagination(filteredPeriods, 10);
   // ─── Summary (reaktif berdasarkan filter) ─────────────
   const subtotalPendapatan = filteredPeriods.reduce((s, p) => s + p.totalRounded, 0);
   const totalSudahCair = filteredPeriods
@@ -964,6 +970,7 @@ export default function LemburPage() {
               description='Data lembur yang disimpan akan muncul di sini'
             />
           ) : (
+          <>
             <div className='w-full overflow-x-auto rounded-lg border'>
               <table className='w-full min-w-[600px] text-sm'>
                 <thead>
@@ -986,7 +993,7 @@ export default function LemburPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredPeriods.map((period, idx) => (
+                  {paginatedPeriods.map((period, idx) => (
                     <tr
                       key={idx}
                       className='border-b border-border last:border-0 hover:bg-muted/30 cursor-pointer transition-colors'
@@ -1030,6 +1037,8 @@ export default function LemburPage() {
                 </tbody>
               </table>
             </div>
+            <PaginationBar currentPage={periodPage} totalPages={periodTotalPages} onPageChange={setPeriodPage} />
+          </>
           )}
         </CardContent>
       </Card>
