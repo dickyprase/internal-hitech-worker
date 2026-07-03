@@ -103,23 +103,19 @@ export default function CutiPage() {
   const sisaCutiTahunIni = balance?.remaining ?? 0;
   const lastYear = balance?.lastYear ?? new Date().getFullYear() - 1;
 
-  // Old quota expires at END of June 30 this year
-  // e.g. quota 2025 expires 30 June 2026 → still usable ON June 30
-  const oldQuotaExpiry = new Date(new Date().getFullYear(), 5, 30); // June 30
-  const isOldQuotaStillActive = new Date() <= oldQuotaExpiry && sisaCutiTahunLalu > 0;
+  // Filter langsung dari tanggal yang DIPILIH (bukan hari ini)
+  const eligibleForOldQuota = selectedDates.filter(d => d.getMonth() <= 5).length; // Jan-Jun
+  const regularDates = selectedDates.filter(d => d.getMonth() > 5).length; // Jul-Des
 
-  // Count dates in Jan 1 - June 30 (eligible for old quota)
-  const eligibleForOldQuota = isOldQuotaStillActive
-    ? selectedDates.filter(d => d.getMonth() <= 5).length  // <= 5 = Jan-Jun
-    : 0;
-  const regularDates = selectedDates.length - eligibleForOldQuota;
-
-  // Auto deduction: old quota first, then current year
+  // Berapa banyak yang bisa dicover kuota tahun lalu
   const potongTahunLalu = Math.min(eligibleForOldQuota, sisaCutiTahunLalu);
+
+  // Sisa hari Jan-Jun yang gagal dicover → dilempar ke tahun ini
   const sisaHariYangBelumTercover = eligibleForOldQuota - potongTahunLalu;
+
+  // Total potongan kuota tahun ini
   const potongTahunIni = regularDates + sisaHariYangBelumTercover;
 
-  // Has any dates eligible for old quota
   const hasOldQuotaUsage = potongTahunLalu > 0;
 
   useEffect(() => {
