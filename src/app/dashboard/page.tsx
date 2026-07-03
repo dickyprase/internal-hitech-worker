@@ -50,6 +50,7 @@ interface MedicalBalance {
 interface OvertimeSummary {
   totalAmount: number;
   totalDays: number;
+  totalHours?: number;
   month: number;
   year: number;
 }
@@ -72,11 +73,21 @@ interface UserListItem {
   createdAt: string;
 }
 
+interface AttendanceData {
+  hariKerjaEfektif: number;
+  totalCuti: number;
+  hariHadirReal: number;
+  uangMakanPerHari: number;
+  totalUangMakan: number;
+  totalUangLembur: number;
+}
+
 interface DashboardData {
   leave: LeaveBalance | null;
   mc: MedicalBalance | null;
   ri: MedicalBalance | null;
   overtime: OvertimeSummary | null;
+  attendance: AttendanceData | null;
   holidays: Holiday[];
   recentLeaves: any[];
   recentMedical: any[];
@@ -319,6 +330,7 @@ export default function DashboardPage() {
         mc: dash.mc || null,
         ri: dash.ri || null,
         overtime: dash.overtime || null,
+        attendance: dash.attendance || null,
         holidays: holidaysRes.data || [],
         recentLeaves: (leaveTxRes.data || []).slice(0, 5),
         recentMedical: (mcTxRes.data || []).slice(0, 5)
@@ -434,12 +446,29 @@ export default function DashboardPage() {
                   : undefined
               }
             />
-            <StatCard
-              title='Estimasi Lembur'
-              value={formatRupiah(data?.overtime?.totalAmount ?? 0)}
-              subtitle={`${data?.overtime?.totalDays ?? 0} hari bulan ini`}
-              icon={<IconClock className='h-4 w-4' />}
-            />
+            <Card className="border-l-4 border-l-indigo-400">
+              <CardContent className="p-5">
+                <div className="flex items-start justify-between">
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">Estimasi Pendapatan</p>
+                    <p className="text-3xl font-bold text-indigo-600">
+                      {formatRupiah((data?.attendance?.totalUangMakan ?? 0) + (data?.overtime?.totalAmount ?? 0))}
+                    </p>
+                  </div>
+                  <IconClock className="h-5 w-5 text-indigo-400" />
+                </div>
+                <div className="flex flex-col space-y-1 text-sm mt-2">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Uang Makan ({data?.attendance?.hariHadirReal ?? 0} hari kerja):</span>
+                    <span className="font-medium">{formatRupiah(data?.attendance?.totalUangMakan ?? 0)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Uang Lembur ({data?.overtime?.totalHours ?? 0} jam):</span>
+                    <span className="font-medium">{formatRupiah(data?.overtime?.totalAmount ?? 0)}</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
 
           {/* Quick Actions */}
@@ -591,20 +620,27 @@ export default function DashboardPage() {
                   </p>
                 </CardContent>
               </Card>
-              <Card className='border-l-4 border-l-violet-400'>
+              <Card className='border-l-4 border-l-indigo-400'>
                 <CardContent className='p-5'>
                   <div className='flex items-start justify-between'>
                     <div className='space-y-1'>
-                      <p className='text-sm text-muted-foreground'>Estimasi Lembur</p>
-                      <p className='text-3xl font-bold'>
-                        {formatRupiah(data?.overtime?.totalAmount ?? 0)}
+                      <p className='text-sm text-muted-foreground'>Estimasi Pendapatan</p>
+                      <p className='text-3xl font-bold text-indigo-600'>
+                        {formatRupiah((data?.attendance?.totalUangMakan ?? 0) + (data?.overtime?.totalAmount ?? 0))}
                       </p>
                     </div>
-                    <IconClock className='h-5 w-5 text-violet-400' />
+                    <IconClock className='h-5 w-5 text-indigo-400' />
                   </div>
-                  <p className='text-sm text-muted-foreground mt-2'>
-                    {data?.overtime?.totalDays ?? 0} hari bulan ini
-                  </p>
+                  <div className='flex flex-col space-y-1 text-sm mt-2'>
+                    <div className='flex justify-between'>
+                      <span className='text-muted-foreground'>Uang Makan ({data?.attendance?.hariHadirReal ?? 0} hari):</span>
+                      <span className='font-medium'>{formatRupiah(data?.attendance?.totalUangMakan ?? 0)}</span>
+                    </div>
+                    <div className='flex justify-between'>
+                      <span className='text-muted-foreground'>Uang Lembur ({data?.overtime?.totalHours ?? 0} jam):</span>
+                      <span className='font-medium'>{formatRupiah(data?.overtime?.totalAmount ?? 0)}</span>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
             </div>

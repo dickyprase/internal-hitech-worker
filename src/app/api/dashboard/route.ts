@@ -1,5 +1,6 @@
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { hitungHariKerjaEfektif, hitungTotalCutiKerja } from '@/lib/attendance';
 import { NextResponse } from 'next/server';
 
 export async function GET() {
@@ -11,6 +12,7 @@ export async function GET() {
   const currentMonth = new Date().getMonth();
   const monthStart = new Date(currentYear, currentMonth, 1);
   const monthEnd = new Date(currentYear, currentMonth + 1, 0);
+  const today = new Date();
 
   // Get user profile
   const user = await prisma.user.findUnique({ where: { id: userId } });
@@ -48,7 +50,9 @@ export async function GET() {
     riTransactions,
     overtimeRecords,
     overtimeRules,
-    globalSettings
+    globalSettings,
+    holidays,
+    leaveTransactions
   ] = await Promise.all([
     prisma.leaveBalance.findUnique({ where: { userId_year: { userId, year: currentYear } } }),
     prisma.medicalBalance.findUnique({
@@ -67,7 +71,18 @@ export async function GET() {
       where: { userId, deletedAt: null, date: { gte: monthStart, lte: monthEnd } }
     }),
     prisma.overtimeRule.findMany({ where: { isActive: true } }),
-    prisma.globalSetting.findMany()
+    prisma.globalSetting.findMany(),
+    prisma.holiday.findMany({
+      where: { year: currentYear, deletedAt: null }
+    }),
+    prisma.leaveTransaction.findMany({
+      where: {
+        userId,
+        deletedAt: null,
+        type: 'debit',
+        date: { gte: monthStart, lte: monthEnd }
+      }
+    })
   ]);
 
   // Calculate MC used from transactions
@@ -81,11 +96,10 @@ export async function GET() {
   // Calculate overtime for current month
   const overtimeTotal = overtimeRecords.reduce((sum, r) => sum + Number(r.roundedAmount), 0);
   const overtimeDays = new Set(overtimeRecords.map((r) => r.date.toISOString().split('T')[0])).size;
+  const overtimeHours = overtimeRecords.reduce((sum, r) => sum + Number(r.durationHours), 0);
 
   // Cuti bersama count
-  const cutiBersama = await prisma.holiday.findMany({
-    where: { year: currentYear, type: 'cuti_bersama', deletedAt: null }
-  });
+  const cutiBersama = holidays.filter(h => h.type === 'cuti_bersama');
 
   const leaveQuota =
     leaveBalance?.totalQuota ??
@@ -94,6 +108,29 @@ export async function GET() {
   const leaveRealQuota = Math.max(0, leaveQuota - leaveCutiBersama);
   const leaveUsed = leaveBalance?.used ?? 0;
   const leaveRemaining = Math.max(0, leaveRealQuota - leaveUsed);
+
+  // ─── Attendance Calculation (Exception-Based) ─────────
+  const holidayData = holidays.map(h => ({
+    date: h.date.toISOString().split('T')[0],
+    type: h.type as 'national' | 'cuti_bersama'
+  }));
+
+  // Hari kerja efektif dari awal bulan sampai hari ini
+  const hariKerjaEfektif = hitungHariKerjaEfektif(monthStart, today, holidayData);
+
+  // Total hari cuti user di bulan ini (hanya hari kerja)
+  const cutiDates = leaveTransactions.map(tx => tx.date.toISOString().split('T')[0]);
+  const totalCuti = hitungTotalCutiKerja(cutiDates, holidayData);
+
+  // Hari hadir real
+  const hariHadirReal = Math.max(0, hariKerjaEfektif - totalCuti);
+
+  // Uang makan
+  const uangMakanPerHari = parseInt(globalSettings.find((s) => s.key === 'uang_makan')?.value || '30000');
+  const totalUangMakan = hariHadirReal * uangMakanPerHari;
+
+  // Uang lembur (sudah termasuk uang makan lembur dihitung di kalkulasi lembur)
+  const totalUangLembur = overtimeTotal;
 
   return NextResponse.json({
     data: {
@@ -121,7 +158,16 @@ export async function GET() {
       },
       overtime: {
         totalAmount: overtimeTotal,
-        totalDays: overtimeDays
+        totalDays: overtimeDays,
+        totalHours: overtimeHours
+      },
+      attendance: {
+        hariKerjaEfektif,
+        totalCuti,
+        hariHadirReal,
+        uangMakanPerHari,
+        totalUangMakan,
+        totalUangLembur
       }
     }
   });
