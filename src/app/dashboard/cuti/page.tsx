@@ -92,16 +92,28 @@ export default function CutiPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  // Form state — Calendar multiple
+  // Carry-over state (automatic based on selected dates)
   const [selectedDates, setSelectedDates] = useState<Date[]>([]);
   const [selectedLeaveType, setSelectedLeaveType] = useState<string>('');
   const [leaveDesc, setLeaveDesc] = useState('');
   const [calendarOpen, setCalendarOpen] = useState(false);
 
-  // Carry-over state
-  const currentMonth = new Date().getMonth(); // 0=Jan, 5=Jun
-  const [selectedTahunCuti, setSelectedTahunCuti] = useState<'current' | 'last'>('current');
-  const showCarryOver = currentMonth <= 5 && (balance?.lastYearRemaining ?? 0) > 0;
+  // Auto-calculate carry-over based on selected dates
+  const sisaCutiTahunLalu = balance?.lastYearRemaining ?? 0;
+  const sisaCutiTahunIni = balance?.remaining ?? 0;
+  const lastYear = balance?.lastYear ?? new Date().getFullYear() - 1;
+
+  // Count dates in Jan-Jun (eligible for old quota)
+  const eligibleForOldQuota = selectedDates.filter(d => d.getMonth() <= 5).length;
+  const regularDates = selectedDates.length - eligibleForOldQuota;
+
+  // Auto deduction logic
+  const potongTahunLalu = Math.min(eligibleForOldQuota, sisaCutiTahunLalu);
+  const sisaHariYangBelumTercover = eligibleForOldQuota - potongTahunLalu;
+  const potongTahunIni = regularDates + sisaHariYangBelumTercover;
+
+  // Has any dates in Jan-Jun eligible for old quota
+  const hasOldQuotaUsage = potongTahunLalu > 0;
 
   useEffect(() => {
     loadData();
@@ -132,12 +144,8 @@ export default function CutiPage() {
   const currentLeaveType = leaveTypes.find((lt) => lt.id === Number(selectedLeaveType));
   const needsQuotaCheck = currentLeaveType?.deductQuota ?? true;
 
-  // Active quota based on carry-over selection
-  const activeQuota = selectedTahunCuti === 'last'
-    ? (balance?.lastYearRemaining ?? 0)
-    : (balance?.remaining ?? 0);
-
-  const isOverQuota = needsQuotaCheck && selectedDates.length > activeQuota;
+  // Validation: is over quota?
+  const isOverQuota = needsQuotaCheck && potongTahunIni > sisaCutiTahunIni;
   const canSubmit =
     selectedDates.length > 0 && selectedLeaveType && leaveDesc.trim() && !isOverQuota && !saving;
 
@@ -165,7 +173,7 @@ export default function CutiPage() {
         body: JSON.stringify({
           dates: dateStrings,
           leaveTypeId: Number(selectedLeaveType),
-          sourceYear: selectedTahunCuti === 'last' ? balance?.lastYear : new Date().getFullYear(),
+          sourceYear: new Date().getFullYear(),
           description: leaveDesc
         })
       });
@@ -351,29 +359,6 @@ export default function CutiPage() {
               </Select>
             </div>
 
-
-            {/* Pilih Sumber Kuota (Carry-Over) */}
-            {needsQuotaCheck && showCarryOver && (
-              <div className='space-y-1.5'>
-                <Label>Sumber Kuota Cuti</Label>
-                <Select value={selectedTahunCuti} onValueChange={(v: 'current' | 'last') => setSelectedTahunCuti(v)}>
-                  <SelectTrigger className='w-full'>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value='last'>
-                      Sisa Cuti {balance?.lastYear} (Sisa: {balance?.lastYearRemaining ?? 0} hari)
-                    </SelectItem>
-                    <SelectItem value='current'>
-                      Cuti {new Date().getFullYear()} (Sisa: {balance?.remaining ?? 0} hari)
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className='text-xs text-muted-foreground'>
-                  Sisa cuti tahun lalu berlaku s/d 30 Juni {new Date().getFullYear()}
-                </p>
-              </div>
-            )}
             {/* Calendar Multiple */}
             <div className='space-y-1.5'>
               <Label>Pilih Tanggal Cuti</Label>
@@ -418,16 +403,34 @@ export default function CutiPage() {
               )}
             </div>
 
-            {/* Quota info & validation */}
+            {/* Rincian Pengajuan */}
             {needsQuotaCheck && selectedDates.length > 0 && (
-              <div className={`px-3 py-2 rounded-md text-sm ${
-                isOverQuota
-                  ? 'bg-destructive/10 text-destructive'
-                  : 'bg-muted text-muted-foreground'
-              }`}>
-                Mengajukan <strong>{selectedDates.length} hari</strong>
-                {' '}(Sisa kuota: <strong>{activeQuota} hari</strong>)
-                {isOverQuota && ' — Melebihi batas!'}
+              <div className='flex flex-col gap-2 p-3 rounded-md border bg-slate-50 dark:bg-slate-900/50 text-sm'>
+                <p className='font-semibold mb-1'>Rincian Pengajuan ({selectedDates.length} Hari):</p>
+
+                {potongTahunLalu > 0 && (
+                  <div className='flex justify-between items-center text-amber-700 dark:text-amber-400'>
+                    <span>Klaim Cuti {lastYear} (Exp: 30 Jun)</span>
+                    <span className='font-medium'>-{potongTahunLalu} hari</span>
+                  </div>
+                )}
+
+                {potongTahunIni > 0 && (
+                  <div className='flex justify-between items-center text-slate-700 dark:text-slate-300'>
+                    <span>Klaim Cuti {new Date().getFullYear()}</span>
+                    <span className='font-medium'>-{potongTahunIni} hari</span>
+                  </div>
+                )}
+
+                <div className='border-t pt-2 mt-1 flex justify-between font-semibold'>
+                  <span>Sisa Jatah Cuti Anda:</span>
+                  <span className={isOverQuota ? 'text-red-500' : 'text-emerald-600 dark:text-emerald-400'}>
+                    {Math.max(0, sisaCutiTahunIni - potongTahunIni)} hari
+                  </span>
+                </div>
+                {isOverQuota && (
+                  <p className='text-red-500 text-xs mt-1'>Kuota tidak cukup! Kurangi tanggal atau gunakan jenis cuti bebas kuota.</p>
+                )}
               </div>
             )}
 
