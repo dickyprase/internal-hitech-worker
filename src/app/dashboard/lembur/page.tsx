@@ -100,6 +100,7 @@ export default function LemburPage() {
   const [rules, setRules] = useState<OvertimeRule[]>([]);
   const [gajiPokok, setGajiPokok] = useState(0);
   const [uangMakan, setUangMakan] = useState(15000);
+  const [attendance, setAttendance] = useState<any>(null);
   const [periods, setPeriods] = useState<OvertimePeriod[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -151,7 +152,8 @@ export default function LemburPage() {
         fetch('/api/settings/overtime-rules'),
         fetch(`/api/overtime/records?month=${filterMonth}&year=${filterYear}`),
         fetch('/api/user/me'),
-        fetch('/api/settings/global')
+        fetch('/api/settings/global'),
+        fetch('/api/dashboard')
       ]);
       const rulesData = await rulesRes.json();
       const recordsData = await recordsRes.json();
@@ -164,6 +166,9 @@ export default function LemburPage() {
       const settings = settingsData.data || [];
       const uangMakanSetting = settings.find((s: any) => s.key === 'uang_makan');
       if (uangMakanSetting) setUangMakan(Number(uangMakanSetting.value) || 15000);
+      // Fetch attendance data
+      const dashData = await (await fetch('/api/dashboard')).json();
+      setAttendance(dashData.data?.attendance || null);
     } catch {
       setError('Gagal memuat data');
     } finally {
@@ -961,6 +966,28 @@ export default function LemburPage() {
               </Select>
             </div>
           </div>
+          {/* Rincian Uang Makan */}
+          {attendance && (
+            <div className='flex flex-col gap-2 p-3 mb-4 rounded-lg border bg-slate-50 dark:bg-slate-900/50 text-sm'>
+              <p className='font-semibold'>Rincian Pendapatan Bulan Ini:</p>
+              <div className='flex justify-between'>
+                <span className='text-muted-foreground'>Hari Kerja Efektif:</span>
+                <span className='font-medium'>{attendance.hariKerjaEfektif} hari</span>
+              </div>
+              <div className='flex justify-between'>
+                <span className='text-muted-foreground'>Total Cuti:</span>
+                <span className='font-medium'>-{attendance.totalCuti} hari</span>
+              </div>
+              <div className='flex justify-between'>
+                <span className='text-muted-foreground'>Hari Hadir:</span>
+                <span className='font-medium'>{attendance.hariHadirReal} hari</span>
+              </div>
+              <div className='border-t pt-2 flex justify-between font-semibold'>
+                <span>Uang Makan ({attendance.hariHadirReal} × {formatRupiah(attendance.uangMakanPerHari)}):</span>
+                <span className='text-emerald-600'>{formatRupiah(attendance.totalUangMakan)}</span>
+              </div>
+            </div>
+          )}
         </CardHeader>
         <CardContent className='p-6'>
           {filteredPeriods.length === 0 ? (
