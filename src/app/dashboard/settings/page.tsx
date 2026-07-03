@@ -617,14 +617,30 @@ export default function SettingsPage() {
                               </Badge>
                             </TableCell>
                             <TableCell>
-                              <Button
-                                variant='ghost'
-                                size='icon'
-                                className='h-7 w-7'
-                                onClick={() => handleDeleteHoliday(h.id)}
-                              >
-                                <IconTrash className='h-4 w-4 text-destructive' />
-                              </Button>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button variant='ghost' size='icon' className='h-7 w-7'>
+                                    <IconTrash className='h-4 w-4 text-destructive' />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Hapus Hari Libur?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Hari libur &quot;{h.name}&quot; ({formatDate(h.date)}) akan dihapus.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Batal</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      className='bg-destructive text-destructive-foreground hover:bg-destructive/90'
+                                      onClick={() => handleDeleteHoliday(h.id)}
+                                    >
+                                      Ya, Hapus
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
                             </TableCell>
                           </TableRow>
                         ))

@@ -23,6 +23,7 @@ import {
   SelectValue
 } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import {
   Dialog,
   DialogContent,
@@ -59,6 +60,9 @@ interface LeaveBalance {
   remaining: number;
   expiresAt: string;
   realQuota?: number;
+  lastYear?: number;
+  lastYearRemaining?: number;
+  lastYearExpiresAt?: string;
   cutiBersamaList?: { id: number; date: string; name: string }[];
   totalCutiBersama?: number;
 }
@@ -94,6 +98,11 @@ export default function CutiPage() {
   const [leaveDesc, setLeaveDesc] = useState('');
   const [calendarOpen, setCalendarOpen] = useState(false);
 
+  // Carry-over state
+  const currentMonth = new Date().getMonth(); // 0=Jan, 5=Jun
+  const [selectedTahunCuti, setSelectedTahunCuti] = useState<'current' | 'last'>('current');
+  const showCarryOver = currentMonth <= 5 && (balance?.lastYearRemaining ?? 0) > 0;
+
   useEffect(() => {
     loadData();
   }, []);
@@ -122,7 +131,13 @@ export default function CutiPage() {
   // Derived state
   const currentLeaveType = leaveTypes.find((lt) => lt.id === Number(selectedLeaveType));
   const needsQuotaCheck = currentLeaveType?.deductQuota ?? true;
-  const isOverQuota = needsQuotaCheck && balance && selectedDates.length > balance.remaining;
+
+  // Active quota based on carry-over selection
+  const activeQuota = selectedTahunCuti === 'last'
+    ? (balance?.lastYearRemaining ?? 0)
+    : (balance?.remaining ?? 0);
+
+  const isOverQuota = needsQuotaCheck && selectedDates.length > activeQuota;
   const canSubmit =
     selectedDates.length > 0 && selectedLeaveType && leaveDesc.trim() && !isOverQuota && !saving;
 
@@ -150,6 +165,7 @@ export default function CutiPage() {
         body: JSON.stringify({
           dates: dateStrings,
           leaveTypeId: Number(selectedLeaveType),
+          sourceYear: selectedTahunCuti === 'last' ? balance?.lastYear : new Date().getFullYear(),
           description: leaveDesc
         })
       });
@@ -335,6 +351,29 @@ export default function CutiPage() {
               </Select>
             </div>
 
+
+            {/* Pilih Sumber Kuota (Carry-Over) */}
+            {needsQuotaCheck && showCarryOver && (
+              <div className='space-y-1.5'>
+                <Label>Sumber Kuota Cuti</Label>
+                <Select value={selectedTahunCuti} onValueChange={(v: 'current' | 'last') => setSelectedTahunCuti(v)}>
+                  <SelectTrigger className='w-full'>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value='last'>
+                      Sisa Cuti {balance?.lastYear} (Sisa: {balance?.lastYearRemaining ?? 0} hari)
+                    </SelectItem>
+                    <SelectItem value='current'>
+                      Cuti {new Date().getFullYear()} (Sisa: {balance?.remaining ?? 0} hari)
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className='text-xs text-muted-foreground'>
+                  Sisa cuti tahun lalu berlaku s/d 30 Juni {new Date().getFullYear()}
+                </p>
+              </div>
+            )}
             {/* Calendar Multiple */}
             <div className='space-y-1.5'>
               <Label>Pilih Tanggal Cuti</Label>
@@ -379,11 +418,16 @@ export default function CutiPage() {
               )}
             </div>
 
-            {/* Warning over quota */}
-            {isOverQuota && (
-              <div className='bg-destructive/10 text-destructive px-3 py-2 rounded-md text-sm'>
-                Sisa cuti tidak cukup! Sisa: {balance?.remaining} hari, diajukan:{' '}
-                {selectedDates.length} hari
+            {/* Quota info & validation */}
+            {needsQuotaCheck && selectedDates.length > 0 && (
+              <div className={`px-3 py-2 rounded-md text-sm ${
+                isOverQuota
+                  ? 'bg-destructive/10 text-destructive'
+                  : 'bg-muted text-muted-foreground'
+              }`}>
+                Mengajukan <strong>{selectedDates.length} hari</strong>
+                {' '}(Sisa kuota: <strong>{activeQuota} hari</strong>)
+                {isOverQuota && ' — Melebihi batas!'}
               </div>
             )}
 
@@ -460,14 +504,30 @@ export default function CutiPage() {
                         </TableCell>
                         <TableCell>
                           {tx.type === 'debit' && (
-                            <Button
-                              variant='ghost'
-                              size='icon'
-                              className='h-7 w-7'
-                              onClick={() => handleDelete(tx.id)}
-                            >
-                              <IconTrash className='h-4 w-4 text-destructive' />
-                            </Button>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant='ghost' size='icon' className='h-7 w-7'>
+                                  <IconTrash className='h-4 w-4 text-destructive' />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Hapus Transaksi Cuti?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Transaksi &quot;{tx.description}&quot; akan dihapus. Saldo cuti akan dikembalikan.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Batal</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    className='bg-destructive text-destructive-foreground hover:bg-destructive/90'
+                                    onClick={() => handleDelete(tx.id)}
+                                  >
+                                    Ya, Hapus
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
                           )}
                         </TableCell>
                       </TableRow>
