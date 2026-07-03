@@ -103,16 +103,23 @@ export default function CutiPage() {
   const sisaCutiTahunIni = balance?.remaining ?? 0;
   const lastYear = balance?.lastYear ?? new Date().getFullYear() - 1;
 
-  // Count dates in Jan-Jun (eligible for old quota)
-  const eligibleForOldQuota = selectedDates.filter(d => d.getMonth() <= 5).length;
+  // Old quota expires at END of June 30 this year
+  // e.g. quota 2025 expires 30 June 2026 → still usable ON June 30
+  const oldQuotaExpiry = new Date(new Date().getFullYear(), 5, 30); // June 30
+  const isOldQuotaStillActive = new Date() <= oldQuotaExpiry && sisaCutiTahunLalu > 0;
+
+  // Count dates in Jan 1 - June 30 (eligible for old quota)
+  const eligibleForOldQuota = isOldQuotaStillActive
+    ? selectedDates.filter(d => d.getMonth() <= 5).length  // <= 5 = Jan-Jun
+    : 0;
   const regularDates = selectedDates.length - eligibleForOldQuota;
 
-  // Auto deduction logic
+  // Auto deduction: old quota first, then current year
   const potongTahunLalu = Math.min(eligibleForOldQuota, sisaCutiTahunLalu);
   const sisaHariYangBelumTercover = eligibleForOldQuota - potongTahunLalu;
   const potongTahunIni = regularDates + sisaHariYangBelumTercover;
 
-  // Has any dates in Jan-Jun eligible for old quota
+  // Has any dates eligible for old quota
   const hasOldQuotaUsage = potongTahunLalu > 0;
 
   useEffect(() => {
