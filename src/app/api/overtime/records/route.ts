@@ -100,6 +100,9 @@ export async function POST(req: Request) {
         dailyAmount = upahPerJam * 2 * Number(entry.durationHours) + uangMakan;
       } else if (rule) {
         dailyAmount = upahPerJam * Number(rule.rate) + uangMakan;
+      } else if (entry.dayType === 'weekday') {
+        // Tidak Lembur (Uang Makan Saja)
+        dailyAmount = uangMakan;
       }
 
       const roundedAmount = Math.round(dailyAmount / 1000) * 1000;
