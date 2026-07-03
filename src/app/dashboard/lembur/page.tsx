@@ -70,6 +70,7 @@ interface OvertimePeriod {
   totalRounded: number;
   status: 'belum' | 'cair';
   dayCount: number;
+  uangMakanTotal?: number;
 }
 
 interface ChartDataPoint {
@@ -190,7 +191,7 @@ export default function LemburPage() {
   // Pagination for period table
   const { currentItems: paginatedPeriods, currentPage: periodPage, setCurrentPage: setPeriodPage, totalPages: periodTotalPages } = usePagination(filteredPeriods, 10);
   // ─── Summary (reaktif berdasarkan filter) ─────────────
-  const subtotalPendapatan = filteredPeriods.reduce((s, p) => s + p.totalRounded, 0);
+  const subtotalPendapatan = filteredPeriods.reduce((s, p) => s + p.totalRounded + (p.uangMakanTotal || 0), 0);
   const totalSudahCair = filteredPeriods
     .filter((p) => p.status === 'cair')
     .reduce((s, p) => s + p.totalRounded, 0);
@@ -1030,10 +1031,10 @@ export default function LemburPage() {
                         {formatDate(period.periodStart)} — {formatDate(period.periodEnd)}
                       </td>
                       <td className='py-3.5 px-4 text-muted-foreground whitespace-nowrap'>
-                        {period.dayCount} hari
+                        {period.dayCount > 0 ? `${period.dayCount} hari lembur` : '—'}
                       </td>
                       <td className='py-3.5 px-4 font-bold whitespace-nowrap'>
-                        {formatRupiah(period.totalRounded)}
+                        {formatRupiah(period.totalRounded + (period.uangMakanTotal || 0))}
                       </td>
                       <td className='py-3.5 px-4 whitespace-nowrap'>
                         <Badge
@@ -1116,6 +1117,25 @@ export default function LemburPage() {
                   const hrs = Number(record.durationHours);
                   const isNoon = hrs === -1;
                   const isZero = hrs === 0;
+
+                  // Default attendance record (jam=0) — tampilkan berbeda
+                  if (isZero && record.dayType !== 'weekend') {
+                    return (
+                      <div
+                        key={rIdx}
+                        className='flex justify-between items-center py-2 px-3 rounded-md border text-sm'
+                      >
+                        <div>
+                          <p className='font-medium'>{formatDate(record.date)}</p>
+                          <p className='text-xs text-muted-foreground'>Hadir (Tidak Lembur)</p>
+                        </div>
+                        <Badge className='text-xs font-normal text-muted-foreground' variant='secondary'>
+                          Uang Makan Valid
+                        </Badge>
+                      </div>
+                    );
+                  }
+
                   return (
                     <div
                       key={rIdx}
@@ -1125,7 +1145,7 @@ export default function LemburPage() {
                         <p className='font-medium'>{formatDate(record.date)}</p>
                         <p className='text-xs text-muted-foreground'>
                           {record.dayType === 'weekend' ? 'Weekend' : 'Weekday'}
-                          {isNoon ? ' · Tidak Masuk' : isZero ? ' · Uang Makan' : ` · ${hrs} jam`}
+                          {isNoon ? ' · Tidak Masuk' : ` · ${hrs} jam`}
                         </p>
                       </div>
                       <div className='text-right shrink-0 ml-4'>

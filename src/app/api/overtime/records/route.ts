@@ -48,14 +48,20 @@ export async function GET(req: Request) {
         };
       }
       acc[key].records.push(record);
-      acc[key].totalAmount += Number(record.dailyAmount);
-      acc[key].totalRounded += Number(record.roundedAmount);
-      if (
-        Number(record.durationHours) > 0 ||
-        (record.dayType !== 'weekend' && Number(record.roundedAmount) > 0)
-      ) {
+      const hrs = Number(record.durationHours);
+      const amt = Number(record.dailyAmount);
+      const rnd = Number(record.roundedAmount);
+
+      // Only count actual overtime (jam > 0) as "hari aktif lembur"
+      if (hrs > 0) {
         acc[key].dayCount++;
+        acc[key].totalAmount += amt;
+        acc[key].totalRounded += rnd;
+      } else {
+        // Default attendance record — track uang makan separately
+        acc[key].uangMakanTotal = (acc[key].uangMakanTotal || 0) + rnd;
       }
+
       if (record.status === 'cair') {
         acc[key].status = 'cair';
       }
@@ -107,8 +113,26 @@ export async function POST(req: Request) {
 
       const roundedAmount = Math.round(dailyAmount / 1000) * 1000;
 
-      const record = await tx.overtimeRecord.create({
-        data: {
+      // UPSERT: update if exists, create if not
+      const record = await tx.overtimeRecord.upsert({
+        where: {
+          userId_date: { userId, date }
+        },
+        update: {
+          dayType: entry.dayType,
+          isFriday: entry.isFriday || false,
+          overtimeRuleId: entry.overtimeRuleId || null,
+          durationHours: entry.durationHours,
+          rateSnapshot: rule ? Number(rule.rate) : entry.dayType === 'weekend' ? 2 : 0,
+          gajiSnapshot: gajiPokok,
+          uangMakanSnapshot: uangMakan,
+          dailyAmount,
+          roundedAmount,
+          periodStart,
+          periodEnd,
+          deletedAt: null // un-soft-delete if was deleted
+        },
+        create: {
           userId,
           date,
           dayType: entry.dayType,

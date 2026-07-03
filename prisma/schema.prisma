@@ -138,7 +138,7 @@ model OvertimeRecord {
   user         User          @relation(fields: [userId], references: [id])
   overtimeRule OvertimeRule? @relation(fields: [overtimeRuleId], references: [id])
 
-  @@index([userId, date])
+  @@unique([userId, date])
   @@index([userId, periodStart, periodEnd])
   @@map("overtime_records")
 }
