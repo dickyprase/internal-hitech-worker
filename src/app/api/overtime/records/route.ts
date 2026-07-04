@@ -22,28 +22,16 @@ export async function GET(req: Request) {
     where.date = { gte: startDate, lte: endDate };
   }
 
-  // Fetch records (ALL, including jam=0) + holidays + uang makan setting
-  const [records, holidays, uangMakanSetting] = await Promise.all([
-    prisma.overtimeRecord.findMany({
-      where,
-      include: { overtimeRule: true },
-      orderBy: [{ periodStart: 'desc' }, { date: 'asc' }]
-    }),
-    prisma.holiday.findMany({
-      where: { year: parseInt(year || String(new Date().getFullYear())), deletedAt: null }
-    }),
-    prisma.globalSetting.findUnique({ where: { key: 'uang_makan' } })
-  ]);
+  // Fetch ALL records from DB (jam=0 and jam>0) — Single Source of Truth
+  const records = await prisma.overtimeRecord.findMany({
+    where,
+    include: { overtimeRule: true },
+    orderBy: [{ periodStart: 'desc' }, { date: 'asc' }]
+  });
 
-  const uangMakan = parseInt(uangMakanSetting?.value || '30000');
-  const holidaySet = new Set(holidays.map(h => h.date.toISOString().split('T')[0]));
-  const today = new Date();
-  const todayStr = toLocalDateStr(today);
-
-  // Group records by period
+  // Group by period
   const grouped: Record<string, any> = {};
 
-  // First: process existing records (both jam>0 and jam=0)
   for (const record of records) {
     const recordDate = new Date(record.date);
     const pStart = getPeriodStart(recordDate);
@@ -67,20 +55,12 @@ export async function GET(req: Request) {
     const hrs = Number(record.durationHours);
     const rounded = Number(record.roundedAmount);
 
+    grouped[key].records.push(record);
+
     if (hrs > 0) {
-      // Real overtime
-      grouped[key].records.push({
-        ...record,
-        isVirtual: false
-      });
       grouped[key].dayCount++;
       grouped[key].totalOvertime += rounded;
     } else {
-      // Existing jam=0 record (uang makan)
-      grouped[key].records.push({
-        ...record,
-        isVirtual: false
-      });
       grouped[key].totalUangMakan += rounded;
     }
 
@@ -90,49 +70,6 @@ export async function GET(req: Request) {
     if (record.status === 'cair') {
       grouped[key].status = 'cair';
     }
-  }
-
-  // Second: for each period, generate virtual entries for missing weekdays
-  for (const key of Object.keys(grouped)) {
-    const period = grouped[key];
-    const pStart = new Date(period.periodStart);
-    const pEnd = new Date(period.periodEnd);
-    const existingDates = new Set(period.records.map((r: any) => toLocalDateStr(new Date(r.date))));
-
-    let current = new Date(pStart);
-    while (current <= pEnd) {
-      const dateStr = toLocalDateStr(current);
-      const dayOfWeek = current.getDay(); // 0=Sun, 6=Sat
-      const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-      const isHoliday = holidaySet.has(dateStr);
-      const isPast = dateStr <= todayStr;
-
-      // Only generate virtual for weekdays, not holidays, that are past/today, and not already recorded
-      if (!isWeekend && !isHoliday && isPast && !existingDates.has(dateStr)) {
-        period.records.push({
-          id: `virtual_${dateStr}`,
-          date: dateStr + 'T00:00:00.000Z',
-          dayType: 'weekday',
-          durationHours: 0,
-          roundedAmount: uangMakan,
-          status: 'belum',
-          isVirtual: true,
-          overtimeRule: null
-        });
-        period.totalUangMakan += uangMakan;
-        period.totalAmount += uangMakan;
-        period.totalRounded += uangMakan;
-      }
-
-      current.setDate(current.getDate() + 1);
-    }
-
-    // Sort records by date
-    period.records.sort((a: any, b: any) => {
-      const da = a.date instanceof Date ? a.date : new Date(a.date);
-      const db = b.date instanceof Date ? b.date : new Date(b.date);
-      return da.getTime() - db.getTime();
-    });
   }
 
   return NextResponse.json({ data: Object.values(grouped) });
@@ -152,8 +89,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Data lembur tidak valid' }, { status: 400 });
   }
 
+  // Fetch uang_makan from DB if not provided
+  let uangMakanValue = uangMakan;
+  if (!uangMakanValue) {
+    const setting = await prisma.globalSetting.findUnique({ where: { key: 'uang_makan' } });
+    uangMakanValue = parseInt(setting?.value || '30000');
+  }
+
   const rules = await prisma.overtimeRule.findMany({ where: { isActive: true } });
-  const upahPerJam = gajiPokok / 173;
+  const upahPerJam = (gajiPokok || 0) / 173;
 
   const firstDate = new Date(dates[0].date);
   const periodStart = getPeriodStart(firstDate);
@@ -164,30 +108,37 @@ export async function POST(req: Request) {
     for (const entry of dates) {
       const date = new Date(entry.date);
       const rule = entry.overtimeRuleId ? rules.find((r) => r.id === entry.overtimeRuleId) : null;
-
-      if (!rule && entry.dayType !== 'weekend') {
-        continue;
-      }
+      const isWeekend = entry.dayType === 'weekend';
 
       let dailyAmount = 0;
-      if (entry.dayType === 'weekend') {
-        dailyAmount = upahPerJam * 2 * Number(entry.durationHours) + uangMakan;
+      let durationHours = Number(entry.durationHours || 0);
+
+      if (isWeekend && durationHours > 0) {
+        // Weekend with overtime
+        dailyAmount = upahPerJam * 2 * durationHours + uangMakanValue;
       } else if (rule) {
-        dailyAmount = upahPerJam * Number(rule.rate) + uangMakan;
+        // Weekday with overtime
+        dailyAmount = upahPerJam * Number(rule.rate) + uangMakanValue;
+        durationHours = Number(rule.durationHours);
+      } else {
+        // No overtime (Tidak Lembur) — save uang makan only
+        dailyAmount = uangMakanValue;
+        durationHours = 0;
       }
 
       const roundedAmount = Math.round(dailyAmount / 1000) * 1000;
 
+      // UPSERT: always save to DB (jam=0 gets uang_makan, jam>0 gets full amount)
       const record = await tx.overtimeRecord.upsert({
         where: { userId_date: { userId, date } },
         update: {
-          dayType: entry.dayType,
+          dayType: entry.dayType || 'weekday',
           isFriday: entry.isFriday || false,
           overtimeRuleId: entry.overtimeRuleId || null,
-          durationHours: entry.durationHours,
-          rateSnapshot: rule ? Number(rule.rate) : entry.dayType === 'weekend' ? 2 : 0,
-          gajiSnapshot: gajiPokok,
-          uangMakanSnapshot: uangMakan,
+          durationHours,
+          rateSnapshot: rule ? Number(rule.rate) : isWeekend ? 2 : 0,
+          gajiSnapshot: gajiPokok || 0,
+          uangMakanSnapshot: uangMakanValue,
           dailyAmount,
           roundedAmount,
           periodStart,
@@ -197,13 +148,13 @@ export async function POST(req: Request) {
         create: {
           userId,
           date,
-          dayType: entry.dayType,
+          dayType: entry.dayType || 'weekday',
           isFriday: entry.isFriday || false,
           overtimeRuleId: entry.overtimeRuleId || null,
-          durationHours: entry.durationHours,
-          rateSnapshot: rule ? Number(rule.rate) : entry.dayType === 'weekend' ? 2 : 0,
-          gajiSnapshot: gajiPokok,
-          uangMakanSnapshot: uangMakan,
+          durationHours,
+          rateSnapshot: rule ? Number(rule.rate) : isWeekend ? 2 : 0,
+          gajiSnapshot: gajiPokok || 0,
+          uangMakanSnapshot: uangMakanValue,
           dailyAmount,
           roundedAmount,
           periodStart,

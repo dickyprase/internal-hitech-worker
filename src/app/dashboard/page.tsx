@@ -74,12 +74,9 @@ interface UserListItem {
 }
 
 interface AttendanceData {
-  hariKerjaEfektif: number;
-  totalCuti: number;
-  hariHadirReal: number;
-  uangMakanPerHari: number;
   totalUangMakan: number;
   totalUangLembur: number;
+  totalPendapatan: number;
 }
 
 interface DashboardData {
@@ -452,7 +449,7 @@ export default function DashboardPage() {
                   <div className="space-y-1">
                     <p className="text-sm text-muted-foreground">Estimasi Pendapatan</p>
                     <p className="text-3xl font-bold text-indigo-600">
-                      {formatRupiah((data?.attendance?.totalUangMakan ?? 0) + (data?.overtime?.totalAmount ?? 0))}
+                      {formatRupiah(data?.attendance?.totalPendapatan ?? 0)}
                     </p>
                   </div>
                   <IconClock className="h-5 w-5 text-indigo-400" />
@@ -616,7 +613,7 @@ export default function DashboardPage() {
                     <div className='space-y-1'>
                       <p className='text-sm text-muted-foreground'>Estimasi Pendapatan</p>
                       <p className='text-3xl font-bold text-indigo-600'>
-                        {formatRupiah((data?.attendance?.totalUangMakan ?? 0) + (data?.overtime?.totalAmount ?? 0))}
+                        {formatRupiah(data?.attendance?.totalPendapatan ?? 0)}
                       </p>
                     </div>
                     <IconClock className='h-5 w-5 text-indigo-400' />

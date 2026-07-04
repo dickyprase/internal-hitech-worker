@@ -1,6 +1,6 @@
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { hitungHariKerjaEfektif, hitungTotalCutiKerja } from '@/lib/attendance';
+
 import { NextResponse } from 'next/server';
 
 export async function GET() {
@@ -51,8 +51,7 @@ export async function GET() {
     overtimeRecords,
     overtimeRules,
     globalSettings,
-    holidays,
-    leaveTransactions
+    holidays
   ] = await Promise.all([
     prisma.leaveBalance.findUnique({ where: { userId_year: { userId, year: currentYear } } }),
     prisma.medicalBalance.findUnique({
@@ -74,14 +73,6 @@ export async function GET() {
     prisma.globalSetting.findMany(),
     prisma.holiday.findMany({
       where: { year: currentYear, deletedAt: null }
-    }),
-    prisma.leaveTransaction.findMany({
-      where: {
-        userId,
-        deletedAt: null,
-        type: 'debit',
-        date: { gte: monthStart, lte: monthEnd }
-      }
     })
   ]);
 
@@ -109,28 +100,17 @@ export async function GET() {
   const leaveUsed = leaveBalance?.used ?? 0;
   const leaveRemaining = Math.max(0, leaveRealQuota - leaveUsed);
 
-  // ─── Attendance Calculation (Exception-Based) ─────────
-  const holidayData = holidays.map(h => ({
-    date: h.date.toISOString().split('T')[0],
-    type: h.type as 'national' | 'cuti_bersama'
-  }));
+  // ─── Attendance Calculation (from DB) ─────────
+  // Sum from DB — Single Source of Truth
+  const totalUangMakan = overtimeRecords
+    .filter(r => Number(r.durationHours) === 0)
+    .reduce((sum, r) => sum + Number(r.roundedAmount), 0);
 
-  // Hari kerja efektif dari awal bulan sampai hari ini
-  const hariKerjaEfektif = hitungHariKerjaEfektif(monthStart, today, holidayData);
+  const totalUangLembur = overtimeRecords
+    .filter(r => Number(r.durationHours) > 0)
+    .reduce((sum, r) => sum + Number(r.roundedAmount), 0);
 
-  // Total hari cuti user di bulan ini (hanya hari kerja)
-  const cutiDates = leaveTransactions.map(tx => tx.date.toISOString().split('T')[0]);
-  const totalCuti = hitungTotalCutiKerja(cutiDates, holidayData);
-
-  // Hari hadir real
-  const hariHadirReal = Math.max(0, hariKerjaEfektif - totalCuti);
-
-  // Uang makan
-  const uangMakanPerHari = parseInt(globalSettings.find((s) => s.key === 'uang_makan')?.value || '30000');
-  const totalUangMakan = hariHadirReal * uangMakanPerHari;
-
-  // Uang lembur (sudah termasuk uang makan lembur dihitung di kalkulasi lembur)
-  const totalUangLembur = overtimeTotal;
+  const totalPendapatan = totalUangMakan + totalUangLembur;
 
   return NextResponse.json({
     data: {
@@ -162,12 +142,9 @@ export async function GET() {
         totalHours: overtimeHours
       },
       attendance: {
-        hariKerjaEfektif,
-        totalCuti,
-        hariHadirReal,
-        uangMakanPerHari,
         totalUangMakan,
-        totalUangLembur
+        totalUangLembur,
+        totalPendapatan
       }
     }
   });

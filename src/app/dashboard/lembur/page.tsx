@@ -103,7 +103,7 @@ export default function LemburPage() {
   const [rules, setRules] = useState<OvertimeRule[]>([]);
   const [gajiPokok, setGajiPokok] = useState(0);
   const [uangMakan, setUangMakan] = useState(15000);
-  const [attendance, setAttendance] = useState<any>(null);
+  
   const [periods, setPeriods] = useState<OvertimePeriod[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -169,9 +169,6 @@ export default function LemburPage() {
       const settings = settingsData.data || [];
       const uangMakanSetting = settings.find((s: any) => s.key === 'uang_makan');
       if (uangMakanSetting) setUangMakan(Number(uangMakanSetting.value) || 15000);
-      // Fetch attendance data
-      const dashData = await (await fetch('/api/dashboard')).json();
-      setAttendance(dashData.data?.attendance || null);
     } catch {
       setError('Gagal memuat data');
     } finally {
