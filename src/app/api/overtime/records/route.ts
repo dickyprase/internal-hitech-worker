@@ -14,7 +14,7 @@ export async function GET(req: Request) {
   const month = searchParams.get('month');
   const year = searchParams.get('year');
 
-  const where: any = { userId, deletedAt: null };
+  const where: any = { userId, deletedAt: null, durationHours: { gt: 0 } };
 
   if (month && year) {
     const startDate = new Date(parseInt(year), parseInt(month) - 1, 1);
@@ -48,19 +48,9 @@ export async function GET(req: Request) {
         };
       }
       acc[key].records.push(record);
-      const hrs = Number(record.durationHours);
-      const amt = Number(record.dailyAmount);
-      const rnd = Number(record.roundedAmount);
-
-      // Only count actual overtime (jam > 0) as "hari aktif lembur"
-      if (hrs > 0) {
-        acc[key].dayCount++;
-        acc[key].totalAmount += amt;
-        acc[key].totalRounded += rnd;
-      } else {
-        // Default attendance record — track uang makan separately
-        acc[key].uangMakanTotal = (acc[key].uangMakanTotal || 0) + rnd;
-      }
+      acc[key].dayCount++;
+      acc[key].totalAmount += Number(record.dailyAmount);
+      acc[key].totalRounded += Number(record.roundedAmount);
 
       if (record.status === 'cair') {
         acc[key].status = 'cair';
@@ -101,14 +91,16 @@ export async function POST(req: Request) {
       const date = new Date(entry.date);
       const rule = entry.overtimeRuleId ? rules.find((r) => r.id === entry.overtimeRuleId) : null;
 
+      // Skip if no actual overtime (Tidak Lembur → don't save)
+      if (!rule && entry.dayType !== 'weekend') {
+        continue;
+      }
+
       let dailyAmount = 0;
       if (entry.dayType === 'weekend') {
         dailyAmount = upahPerJam * 2 * Number(entry.durationHours) + uangMakan;
       } else if (rule) {
         dailyAmount = upahPerJam * Number(rule.rate) + uangMakan;
-      } else if (entry.dayType === 'weekday') {
-        // Tidak Lembur (Uang Makan Saja)
-        dailyAmount = uangMakan;
       }
 
       const roundedAmount = Math.round(dailyAmount / 1000) * 1000;

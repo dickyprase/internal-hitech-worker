@@ -70,7 +70,7 @@ interface OvertimePeriod {
   totalRounded: number;
   status: 'belum' | 'cair';
   dayCount: number;
-  uangMakanTotal?: number;
+
 }
 
 interface ChartDataPoint {
@@ -191,7 +191,7 @@ export default function LemburPage() {
   // Pagination for period table
   const { currentItems: paginatedPeriods, currentPage: periodPage, setCurrentPage: setPeriodPage, totalPages: periodTotalPages } = usePagination(filteredPeriods, 10);
   // ─── Summary (reaktif berdasarkan filter) ─────────────
-  const subtotalPendapatan = filteredPeriods.reduce((s, p) => s + p.totalRounded + (p.uangMakanTotal || 0), 0);
+  const subtotalPendapatan = filteredPeriods.reduce((s, p) => s + p.totalRounded, 0);
   const totalSudahCair = filteredPeriods
     .filter((p) => p.status === 'cair')
     .reduce((s, p) => s + p.totalRounded, 0);
@@ -1034,7 +1034,7 @@ export default function LemburPage() {
                         {period.dayCount > 0 ? `${period.dayCount} hari lembur` : '—'}
                       </td>
                       <td className='py-3.5 px-4 font-bold whitespace-nowrap'>
-                        {formatRupiah(period.totalRounded + (period.uangMakanTotal || 0))}
+                        {formatRupiah(period.totalRounded)}
                       </td>
                       <td className='py-3.5 px-4 whitespace-nowrap'>
                         <Badge
@@ -1110,32 +1110,11 @@ export default function LemburPage() {
                 </div>
               </div>
 
-              {/* Breakdown Harian */}
+              {/* Breakdown Harian — Only actual overtime */}
               <div className='space-y-2'>
-                <p className='text-sm font-medium'>Breakdown Harian</p>
+                <p className='text-sm font-medium'>Breakdown Lembur</p>
                 {selectedPeriod.records.map((record: any, rIdx: number) => {
                   const hrs = Number(record.durationHours);
-                  const isNoon = hrs === -1;
-                  const isZero = hrs === 0;
-
-                  // Default attendance record (jam=0) — tampilkan berbeda
-                  if (isZero && record.dayType !== 'weekend') {
-                    return (
-                      <div
-                        key={rIdx}
-                        className='flex justify-between items-center py-2 px-3 rounded-md border text-sm'
-                      >
-                        <div>
-                          <p className='font-medium'>{formatDate(record.date)}</p>
-                          <p className='text-xs text-muted-foreground'>Hadir (Tidak Lembur)</p>
-                        </div>
-                        <Badge className='text-xs font-normal text-muted-foreground' variant='secondary'>
-                          Uang Makan Valid
-                        </Badge>
-                      </div>
-                    );
-                  }
-
                   return (
                     <div
                       key={rIdx}
@@ -1144,8 +1123,7 @@ export default function LemburPage() {
                       <div>
                         <p className='font-medium'>{formatDate(record.date)}</p>
                         <p className='text-xs text-muted-foreground'>
-                          {record.dayType === 'weekend' ? 'Weekend' : 'Weekday'}
-                          {isNoon ? ' · Tidak Masuk' : ` · ${hrs} jam`}
+                          {record.dayType === 'weekend' ? 'Weekend' : 'Weekday'} · {hrs} jam
                         </p>
                       </div>
                       <div className='text-right shrink-0 ml-4'>
@@ -1162,6 +1140,25 @@ export default function LemburPage() {
                     </div>
                   );
                 })}
+
+                {/* Virtual Uang Makan Summary */}
+                {attendance && attendance.totalUangMakan > 0 && (
+                  <div className='flex justify-between items-center py-3 bg-slate-50 dark:bg-slate-900/50 px-3 rounded-md border mt-4'>
+                    <div>
+                      <p className='font-semibold text-emerald-700 dark:text-emerald-400 text-sm'>Akumulasi Uang Makan</p>
+                      <p className='text-xs text-muted-foreground'>{attendance.hariHadirReal} hari kerja berjalan</p>
+                    </div>
+                    <span className='font-bold text-emerald-700 dark:text-emerald-400'>{formatRupiah(attendance.totalUangMakan)}</span>
+                  </div>
+                )}
+
+                {/* Grand Total */}
+                <div className='flex justify-between items-center pt-2 border-t mt-2'>
+                  <span className='font-bold text-sm'>Total Pendapatan</span>
+                  <span className='font-bold text-sm'>
+                    {formatRupiah(selectedPeriod.totalRounded + (attendance?.totalUangMakan || 0))}
+                  </span>
+                </div>
               </div>
 
               <Separator />
