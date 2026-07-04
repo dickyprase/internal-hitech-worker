@@ -1092,65 +1092,28 @@ export default function LemburPage() {
 
               {/* Breakdown Harian — Semua hari dalam periode */}
               <div className='space-y-2'>
-                <p className='text-sm font-medium'>Breakdown Harian</p>
+                <p className='text-sm font-medium'>Rincian Periode</p>
                 {selectedPeriod.records.map((record: any, rIdx: number) => {
                   const hrs = Number(record.durationHours);
-                  const isVirtual = record.isVirtual;
                   const isOvertime = hrs > 0;
+                  const amount = Number(record.roundedAmount);
 
                   return (
                     <div
                       key={rIdx}
-                      className={`flex items-center justify-between p-3 rounded-md border text-sm ${
-                        isVirtual ? 'bg-slate-50/50 dark:bg-slate-900/30' : ''
-                      }`}
+                      className='flex items-center justify-between p-3 rounded-md border text-sm'
                     >
                       <div>
                         <p className='font-medium'>{formatDate(record.date)}</p>
                         <p className='text-xs text-muted-foreground'>
-                          {isOvertime
-                            ? `${record.dayType === 'weekend' ? 'Weekend' : 'Weekday'} · ${hrs} jam`
-                            : isVirtual
-                              ? 'Hadir (Tidak Lembur)'
-                              : 'Hadir (Tidak Lembur)'
-                          }
+                          {record.dayType === 'weekend' ? 'Weekend' : 'Weekday'}
+                          {isOvertime ? ` · ${hrs} jam` : ' · Uang Makan'}
                         </p>
                       </div>
-                      <div className='text-right shrink-0 ml-4'>
-                        {isOvertime ? (
-                          <>
-                            <p className='font-medium'>{formatRupiah(Number(record.roundedAmount))}</p>
-                            {(record.dayType === 'weekend' || record.dayType === 'holiday') && (
-                              <Badge
-                                variant='outline'
-                                className='mt-1 bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-700'
-                              >
-                                Rate: {Number(record.rateSnapshot)}×
-                              </Badge>
-                            )}
-                          </>
-                        ) : (
-                          <Badge variant='secondary' className='text-xs font-normal'>
-                            Uang Makan
-                          </Badge>
-                        )}
-                      </div>
+                      <p className='font-medium shrink-0 ml-4'>{formatRupiah(amount)}</p>
                     </div>
                   );
                 })}
-
-                {/* Summary */}
-                {(selectedPeriod.totalUangMakan ?? 0) > 0 && (
-                  <div className='flex justify-between items-center py-3 bg-slate-50 dark:bg-slate-900/50 px-3 rounded-md border mt-4'>
-                    <div>
-                      <p className='font-semibold text-emerald-700 dark:text-emerald-400 text-sm'>Akumulasi Uang Makan</p>
-                      <p className='text-xs text-muted-foreground'>
-                        {selectedPeriod.records.filter((r: any) => !r.isVirtual || r.isVirtual).length} hari dalam periode
-                      </p>
-                    </div>
-                    <span className='font-bold text-emerald-700 dark:text-emerald-400'>{formatRupiah(selectedPeriod.totalUangMakan ?? 0)}</span>
-                  </div>
-                )}
 
                 {/* Grand Total */}
                 <div className='flex justify-between items-center pt-2 border-t mt-2'>

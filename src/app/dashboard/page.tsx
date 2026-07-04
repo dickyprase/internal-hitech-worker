@@ -457,16 +457,6 @@ export default function DashboardPage() {
                   </div>
                   <IconClock className="h-5 w-5 text-indigo-400" />
                 </div>
-                <div className="flex flex-col space-y-1 text-sm mt-2">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Uang Makan ({data?.attendance?.hariHadirReal ?? 0} hari kerja):</span>
-                    <span className="font-medium">{formatRupiah(data?.attendance?.totalUangMakan ?? 0)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Uang Lembur ({data?.overtime?.totalHours ?? 0} jam):</span>
-                    <span className="font-medium">{formatRupiah(data?.overtime?.totalAmount ?? 0)}</span>
-                  </div>
-                </div>
               </CardContent>
             </Card>
           </div>
@@ -630,16 +620,6 @@ export default function DashboardPage() {
                       </p>
                     </div>
                     <IconClock className='h-5 w-5 text-indigo-400' />
-                  </div>
-                  <div className='flex flex-col space-y-1 text-sm mt-2'>
-                    <div className='flex justify-between'>
-                      <span className='text-muted-foreground'>Uang Makan ({data?.attendance?.hariHadirReal ?? 0} hari):</span>
-                      <span className='font-medium'>{formatRupiah(data?.attendance?.totalUangMakan ?? 0)}</span>
-                    </div>
-                    <div className='flex justify-between'>
-                      <span className='text-muted-foreground'>Uang Lembur ({data?.overtime?.totalHours ?? 0} jam):</span>
-                      <span className='font-medium'>{formatRupiah(data?.overtime?.totalAmount ?? 0)}</span>
-                    </div>
                   </div>
                 </CardContent>
               </Card>
